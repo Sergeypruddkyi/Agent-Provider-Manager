@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+
+    <RootNamespace>ClaudeProviderLauncher</RootNamespace>
+    <AssemblyName>ClaudeProviderLauncher</AssemblyName>
+    <Product>Claude Code Provider Launcher</Product>
+    <AssemblyTitle>Claude Code Provider Launcher</AssemblyTitle>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>..\..\assets\icon.ico</ApplicationIcon>
+
+    <!-- Portable, self-contained win-x64 single-file EXE. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- icon.png embedded as WPF resource so it can be referenced as pack://application URI in XAML title bar -->
+    <Resource Include="..\..\assets\icon.png">
+      <LogicalName>icon.png</LogicalName>
+    </Resource>
+  </ItemGroup>
+
+</Project>
