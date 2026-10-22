@@ -94,6 +94,16 @@
                         </StackPanel>
                     </Grid>
 
+                    <!-- CLI Detection Status (shown when no tool is selected, then updated per tool) -->
+                    <StackPanel x:Name="CliStatusPanel" Margin="0,4,0,1" Orientation="Horizontal">
+                        <TextBlock x:Name="ClaudeCliStatusText"
+                                   AutomationProperties.AutomationId="ClaudeCliStatusText"
+                                   Foreground="#9A9A9A" FontSize="12" Margin="0,0,16,0"/>
+                        <TextBlock x:Name="CodexCliStatusText"
+                                   AutomationProperties.AutomationId="CodexCliStatusText"
+                                   Foreground="#9A9A9A" FontSize="12" Margin="0,0,16,0"/>
+                    </StackPanel>
+
                     <TextBlock x:Name="ToolHintText"
                                AutomationProperties.AutomationId="ToolHintText"
                                Text="Select a tool to configure and launch."
@@ -136,8 +146,7 @@
                                     <TextBox x:Name="ProfileNameBox"
                                              AutomationProperties.AutomationId="ProfileNameBox"
                                              Height="30"
-                                             TextChanged="ProfileNameBox_TextChanged"
-                                             ToolTip="Default profile or a saved preset of the selected tool. Type a new name to create a preset."/>
+                                             TextChanged="ProfileNameBox_TextChanged"/>
                                     <Button x:Name="ProfileDropdownButton"
                                             Grid.Column="1"
                                             AutomationProperties.AutomationId="ProfileDropdownButton"
@@ -146,8 +155,7 @@
                                             Height="30"
                                             Margin="2,0,0,0"
                                             Padding="0"
-                                            Click="ProfileDropdownButton_Click"
-                                            ToolTip="Choose a saved profile"/>
+                                            Click="ProfileDropdownButton_Click"/>
                                     <Popup x:Name="ProfileDropdownPopup"
                                            StaysOpen="False"
                                            Placement="Bottom"
@@ -183,19 +191,16 @@
                                 <Button Grid.Column="1" x:Name="SavePresetButton"
                                         AutomationProperties.AutomationId="SavePresetButton"
                                         Content="Save Preset" Margin="8,0,0,0" Padding="10,0" Height="30"
-                                        Click="SavePresetButton_Click"
-                                        ToolTip="Save the current values as a separate user preset for the selected tool"/>
+                                        Click="SavePresetButton_Click"/>
                                 <Button Grid.Column="2" x:Name="NewButton"
                                         AutomationProperties.AutomationId="NewButton"
                                         Content="New" Margin="6,0,0,0" Padding="10,0" Height="30"
-                                        Click="NewButton_Click"
-                                        ToolTip="Clear provider values for manual entry (Working Directory is kept)"/>
+                                        Click="NewButton_Click"/>
                                 <Button Grid.Column="3" x:Name="DeletePresetButton"
                                         AutomationProperties.AutomationId="DeletePresetButton"
                                         Content="Delete" Margin="6,0,0,0" Padding="10,0" Height="30"
                                         IsEnabled="False"
-                                        Click="DeletePresetButton_Click"
-                                        ToolTip="Delete the selected user preset"/>
+                                        Click="DeletePresetButton_Click"/>
                             </Grid>
                         </Grid>
 

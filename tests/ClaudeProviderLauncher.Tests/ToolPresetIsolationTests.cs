@@ -29,7 +29,7 @@ public sealed class ToolPresetIsolationTests : IDisposable
         }
     }
 
-    private PresetStore CreateStore() => new(_filePath);
+    private PresetStore CreateStore() => new(_filePath, loadDefaults: false);
 
     private static ProviderPreset Preset(
         ToolKind tool,

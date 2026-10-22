@@ -4,11 +4,13 @@ namespace ClaudeProviderLauncher.Services;
 /// One entry in the profile picker. System profiles are identified by a stable
 /// identifier, never by their display name, so a user preset with a similar name
 /// can never be mistaken for (or overwrite) a system profile.
+/// Default presets are also identified by a stable prefix.
 /// </summary>
 public sealed class ProfileChoice
 {
     public const string SystemIdPrefix = "system:";
     public const string UserIdPrefix = "user:";
+    public const string DefaultIdPrefix = "default:";
 
     public required string Id { get; init; }
 
@@ -17,6 +19,10 @@ public sealed class ProfileChoice
     public ProviderPreset? Preset { get; init; }
 
     public bool IsSystem => Id.StartsWith(SystemIdPrefix, StringComparison.Ordinal);
+
+    public bool IsDefault => Id.StartsWith(DefaultIdPrefix, StringComparison.Ordinal);
+
+    public bool IsUserPreset => Id.StartsWith(UserIdPrefix, StringComparison.Ordinal);
 
     public static ProfileChoice FromSystem(SystemProfile profile) => new()
     {
@@ -27,8 +33,8 @@ public sealed class ProfileChoice
 
     public static ProfileChoice FromPreset(ProviderPreset preset) => new()
     {
-        Id = UserIdPrefix + preset.Name,
-        DisplayName = preset.Name,
+        Id = preset.IsDefault ? DefaultIdPrefix + preset.Name : UserIdPrefix + preset.Name,
+        DisplayName = preset.IsDefault ? preset.Name + " (Default)" : preset.Name,
         Preset = preset,
     };
 

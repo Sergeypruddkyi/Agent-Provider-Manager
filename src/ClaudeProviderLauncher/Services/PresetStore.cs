@@ -1,4 +1,5 @@
 using System.IO;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -25,13 +26,16 @@ public sealed class ProviderPreset
     /// <see cref="ToolKind.ClaudeCode"/>, which keeps existing presets working.
     /// </summary>
     public ToolKind Tool { get; set; } = ToolKind.ClaudeCode;
+
+    /// <summary>Whether this preset is a built-in default supplied with the application.</summary>
+    public bool IsDefault { get; set; } = false;
 }
 
 /// <summary>
-/// Best-effort persistence of named provider presets in a small JSON file next to the
-/// other per-user launcher state (<c>%LOCALAPPDATA%\ClaudeProviderLauncher\presets.json</c>).
-/// The API key is encrypted at rest with Windows DPAPI (CurrentUser scope), so it is only
-/// readable by the same Windows user on this machine and never stored in plain text.
+/// Best-effort persistence of named provider presets.
+/// Built-in defaults are embedded as a resource and loaded read-only.
+/// User presets are stored in <c>%LOCALAPPDATA%\ClaudeProviderLauncher\presets.json</c>
+/// with API keys encrypted via DPAPI (CurrentUser scope).
 /// </summary>
 public sealed class PresetStore
 {
@@ -44,75 +48,148 @@ public sealed class PresetStore
         Converters = { new JsonStringEnumConverter() },
     };
 
-    private readonly string _filePath;
+    private readonly string _userFilePath;
+    private readonly bool _loadDefaults;
+    private IReadOnlyList<ProviderPreset>? _cachedDefaults;
 
     public PresetStore()
-        : this(Path.Combine(AppPaths.DataDirectory, "presets.json"))
+        : this(Path.Combine(AppPaths.DataDirectory, "presets.json"), loadDefaults: true)
     {
     }
 
     /// <summary>Path-injectable constructor, primarily for tests.</summary>
-    public PresetStore(string filePath)
+    /// <param name="userFilePath">Path to the user presets file.</param>
+    /// <param name="loadDefaults">Whether to load built-in defaults (false for tests using custom paths).</param>
+    public PresetStore(string userFilePath, bool loadDefaults = false)
     {
-        _filePath = filePath;
+        _userFilePath = userFilePath;
+        _loadDefaults = loadDefaults;
     }
 
-    public string FilePath => _filePath;
+    public string UserFilePath => _userFilePath;
 
-    /// <summary>Loads all presets from every tool in stored order. Never throws.</summary>
+    /// <summary>Loads all presets: built-in defaults (read-only) followed by user presets. Never throws.</summary>
     public IReadOnlyList<ProviderPreset> Load()
     {
+        var result = new List<ProviderPreset>();
+
+        // Built-in defaults first (only when enabled)
+        if (_loadDefaults)
+        {
+            result.AddRange(LoadDefaults());
+        }
+
+        // Then user presets
         try
         {
-            if (!File.Exists(_filePath))
+            if (File.Exists(_userFilePath))
             {
-                return [];
-            }
-
-            var file = JsonSerializer.Deserialize<StoredFile>(File.ReadAllText(_filePath), SerializerOptions);
-            if (file?.Presets is null)
-            {
-                return [];
-            }
-
-            var result = new List<ProviderPreset>();
-            foreach (var stored in file.Presets)
-            {
-                if (string.IsNullOrWhiteSpace(stored.Name))
+                var file = JsonSerializer.Deserialize<StoredFile>(File.ReadAllText(_userFilePath), SerializerOptions);
+                if (file?.Presets is not null)
                 {
-                    continue;
+                    foreach (var stored in file.Presets)
+                    {
+                        if (string.IsNullOrWhiteSpace(stored.Name))
+                        {
+                            continue;
+                        }
+
+                        result.Add(new ProviderPreset
+                        {
+                            Name = stored.Name.Trim(),
+                            BaseUrl = stored.BaseUrl ?? string.Empty,
+                            Model = stored.Model ?? string.Empty,
+                            ApiKey = TryUnprotect(stored.ApiKeyProtected),
+                            Tool = stored.Tool,
+                            IsDefault = false,
+                        });
+                    }
                 }
-
-                result.Add(new ProviderPreset
-                {
-                    Name = stored.Name.Trim(),
-                    BaseUrl = stored.BaseUrl ?? string.Empty,
-                    Model = stored.Model ?? string.Empty,
-                    ApiKey = TryUnprotect(stored.ApiKeyProtected),
-                    Tool = stored.Tool,
-                });
             }
-
-            return result;
         }
         catch
         {
-            return [];
+            // Ignore corrupt user file; defaults remain available.
         }
+
+        return result;
     }
 
-    /// <summary>Loads only the presets belonging to <paramref name="tool"/>.</summary>
+    /// <summary>Loads only the presets belonging to <paramref name="tool"/> (defaults + user).</summary>
     public IReadOnlyList<ProviderPreset> Load(ToolKind tool) =>
         Load().Where(p => p.Tool == tool).ToList();
 
-    /// <summary>Persists the full preset list. Returns false when the file could not be written.</summary>
+    /// <summary>Loads only the built-in default presets for a tool.</summary>
+    public IReadOnlyList<ProviderPreset> LoadDefaults(ToolKind tool) =>
+        LoadDefaults().Where(p => p.Tool == tool).ToList();
+
+    /// <summary>Loads only the user presets for a tool.</summary>
+    public IReadOnlyList<ProviderPreset> LoadUser(ToolKind tool) =>
+        Load().Where(p => p.Tool == tool && !p.IsDefault).ToList();
+
+    /// <summary>Loads built-in default presets from the embedded resource.</summary>
+    private IReadOnlyList<ProviderPreset> LoadDefaults()
+    {
+        if (_cachedDefaults is not null)
+        {
+            return _cachedDefaults;
+        }
+
+        var defaults = new List<ProviderPreset>();
+
+        try
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            const string resourceName = "ClaudeProviderLauncher.DefaultPresets.json";
+
+            using var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream is not null)
+            {
+                using var reader = new StreamReader(stream);
+                var json = reader.ReadToEnd();
+                var file = JsonSerializer.Deserialize<StoredFile>(json, SerializerOptions);
+                if (file?.Presets is not null)
+                {
+                    foreach (var stored in file.Presets)
+                    {
+                        if (string.IsNullOrWhiteSpace(stored.Name))
+                        {
+                            continue;
+                        }
+
+                        defaults.Add(new ProviderPreset
+                        {
+                            Name = stored.Name.Trim(),
+                            BaseUrl = stored.BaseUrl ?? string.Empty,
+                            Model = stored.Model ?? string.Empty,
+                            ApiKey = stored.ApiKey ?? string.Empty, // Defaults have no encryption
+                            Tool = stored.Tool,
+                            IsDefault = true,
+                        });
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Resource missing or invalid — continue with empty defaults.
+        }
+
+        _cachedDefaults = defaults;
+        return _cachedDefaults;
+    }
+
+    /// <summary>Persists the full user preset list. Returns false when the file could not be written.</summary>
     public bool Save(IReadOnlyList<ProviderPreset> presets)
     {
         try
         {
+            // Only save user presets (non-defaults)
+            var userPresets = presets.Where(p => !p.IsDefault).ToList();
+
             var file = new StoredFile
             {
-                Presets = presets
+                Presets = userPresets
                     .Where(p => !string.IsNullOrWhiteSpace(p.Name))
                     .Select(p => new StoredPreset
                     {
@@ -125,8 +202,8 @@ public sealed class PresetStore
                     .ToList(),
             };
 
-            Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
-            File.WriteAllText(_filePath, JsonSerializer.Serialize(file, SerializerOptions));
+            Directory.CreateDirectory(Path.GetDirectoryName(_userFilePath)!);
+            File.WriteAllText(_userFilePath, JsonSerializer.Serialize(file, SerializerOptions));
             return true;
         }
         catch
@@ -136,20 +213,23 @@ public sealed class PresetStore
         }
     }
 
-    /// <summary>Returns the Claude Code preset with the given name (case-insensitive), or null.</summary>
-    public ProviderPreset? Find(string name) => Find(ToolKind.ClaudeCode, name);
-
-    /// <summary>Returns the preset with the given name inside one tool, or null.</summary>
+    /// <summary>Returns the preset with the given name inside one tool (defaults + user), or null.</summary>
     public ProviderPreset? Find(ToolKind tool, string name)
     {
         return Load(tool).FirstOrDefault(p => NameEquals(p.Name, name));
     }
 
+    /// <summary>Returns the user preset with the given name inside one tool, or null.</summary>
+    public ProviderPreset? FindUser(ToolKind tool, string name)
+    {
+        return LoadUser(tool).FirstOrDefault(p => NameEquals(p.Name, name));
+    }
+
     /// <summary>
-    /// Inserts a new preset or overwrites the existing preset with the same name
+    /// Inserts a new user preset or overwrites the existing user preset with the same name
     /// inside the same tool (case-insensitive). A preset in the other tool with
-    /// the same name is never touched. Returns false when the file could not be
-    /// written.
+    /// the same name is never touched. Default presets cannot be modified.
+    /// Returns false when the file could not be written or the name belongs to a default.
     /// </summary>
     public bool Upsert(ProviderPreset preset)
     {
@@ -158,13 +238,29 @@ public sealed class PresetStore
             return false;
         }
 
+        // Cannot overwrite a default preset (only when defaults are loaded)
+        if (_loadDefaults)
+        {
+            var existingDefault = LoadDefaults(preset.Tool).FirstOrDefault(p => NameEquals(p.Name, preset.Name));
+            if (existingDefault is not null)
+            {
+                return false;
+            }
+        }
+
         preset.Name = preset.Name.Trim();
+        preset.IsDefault = false;
 
         var list = Load().ToList();
         var index = list.FindIndex(p => p.Tool == preset.Tool && NameEquals(p.Name, preset.Name));
 
         if (index >= 0)
         {
+            // Only replace if the existing one is not a default
+            if (list[index].IsDefault)
+            {
+                return false;
+            }
             list[index] = preset;
         }
         else
@@ -175,17 +271,25 @@ public sealed class PresetStore
         return Save(list);
     }
 
-    /// <summary>Deletes the Claude Code preset with the given name.</summary>
-    public bool Delete(string name) => Delete(ToolKind.ClaudeCode, name);
-
     /// <summary>
-    /// Deletes the preset with the given name inside one tool. Presets belonging to
-    /// the other tool are preserved. Returns false when it did not exist.
+    /// Deletes the user preset with the given name inside one tool.
+    /// Default presets cannot be deleted. Presets belonging to the other tool are preserved.
+    /// Returns false when it did not exist or was a default.
     /// </summary>
     public bool Delete(ToolKind tool, string name)
     {
+        // Cannot delete a default preset (only when defaults are loaded)
+        if (_loadDefaults)
+        {
+            var existingDefault = LoadDefaults(tool).FirstOrDefault(p => NameEquals(p.Name, name));
+            if (existingDefault is not null)
+            {
+                return false;
+            }
+        }
+
         var list = Load().ToList();
-        var removed = list.RemoveAll(p => p.Tool == tool && NameEquals(p.Name, name));
+        var removed = list.RemoveAll(p => p.Tool == tool && NameEquals(p.Name, name) && !p.IsDefault);
 
         if (removed == 0)
         {
@@ -193,6 +297,16 @@ public sealed class PresetStore
         }
 
         return Save(list);
+    }
+
+    /// <summary>Checks if a name is reserved by a default preset for the given tool.</summary>
+    public bool IsNameReservedByDefault(ToolKind tool, string name)
+    {
+        if (!_loadDefaults)
+        {
+            return false;
+        }
+        return LoadDefaults(tool).Any(p => NameEquals(p.Name, name));
     }
 
     private static bool NameEquals(string left, string right)
@@ -249,6 +363,7 @@ public sealed class PresetStore
         public string? BaseUrl { get; set; }
         public string? Model { get; set; }
         public string? ApiKeyProtected { get; set; }
+        public string? ApiKey { get; set; } // For defaults (unencrypted)
         public ToolKind Tool { get; set; } = ToolKind.ClaudeCode;
     }
 }

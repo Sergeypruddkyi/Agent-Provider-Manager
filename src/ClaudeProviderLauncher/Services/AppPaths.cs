@@ -1,17 +1,71 @@
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
 
 namespace ClaudeProviderLauncher.Services;
 
 /// <summary>
-/// Well-known per-user locations used by the launcher.
+/// Well-known locations used by the launcher. All application-owned data is stored
+/// inside the application's own directory so the app is fully portable (e.g. on a USB stick).
 /// </summary>
 public static class AppPaths
 {
-    /// <summary>Directory that holds this launcher's own small state (e.g. last entered values).</summary>
-    public static string DataDirectory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "ClaudeProviderLauncher");
+    private static string? _dataDirectory;
+    private static readonly object _lock = new();
+
+    /// <summary>
+    /// Directory that holds this launcher's own small state (presets, last values, backups, claude-home).
+    /// Resolves to the directory containing the running executable (self-contained single-file friendly).
+    /// </summary>
+    public static string DataDirectory
+    {
+        get
+        {
+            if (_dataDirectory is not null)
+            {
+                return _dataDirectory;
+            }
+
+            lock (_lock)
+            {
+                if (_dataDirectory is not null)
+                {
+                    return _dataDirectory;
+                }
+
+                // For self-contained single-file apps, Assembly.Location returns the temp extraction path.
+                // Use the entry assembly's location as the primary anchor, then fall back to the current process.
+                var asm = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
+                var location = asm.Location;
+
+                if (string.IsNullOrWhiteSpace(location) || !File.Exists(location))
+                {
+                    // Fallback: current process main module
+                    try
+                    {
+                        using var proc = System.Diagnostics.Process.GetCurrentProcess();
+                        location = proc.MainModule?.FileName ?? string.Empty;
+                    }
+                    catch
+                    {
+                        // Ignore, will use fallback below
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(location) && File.Exists(location))
+                {
+                    _dataDirectory = Path.GetDirectoryName(location)!;
+                }
+                else
+                {
+                    // Last resort: current directory (only when running from source/debug without publish)
+                    _dataDirectory = AppContext.BaseDirectory;
+                }
+
+                return _dataDirectory;
+            }
+        }
+    }
 
     /// <summary>
     /// A dedicated Claude Code config directory used only for launches started by this app.

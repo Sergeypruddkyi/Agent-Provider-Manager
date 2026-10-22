@@ -1,0 +1,18 @@
+{
+  "Presets": [
+    {
+      "Name": "AnyModel",
+      "BaseUrl": "https://anymodel.org",
+      "Model": "claude-sonnet-4-5",
+      "ApiKey": "",
+      "Tool": "ClaudeCode"
+    },
+    {
+      "Name": "OpenRouter",
+      "BaseUrl": "https://openrouter.ai/api",
+      "Model": "anthropic/claude-3.5-sonnet",
+      "ApiKey": "",
+      "Tool": "ClaudeCode"
+    }
+  ]
+}

@@ -1,9 +1,10 @@
-# Claude Code Provider Launcher
+# Agent Provider Manager
 
-Минимальный Windows‑лаунчер: вписать Base URL, ключ, модель и папку — и открыть Claude Code CLI
-в отдельном интерактивном консольном окне с этими настройками.
+Минимальный Windows‑лаунчер для управления провайдерами **Claude Code** и **OpenAI Codex**:
+вписать Base URL, ключ, модель и папку — и открыть выбранный инструмент в отдельном
+интерактивном консольном окне с этими настройками.
 
-Приложение **не является** менеджером провайдеров: нет профилей, БД, истории, логирования,
+Приложение **не является** полноценным менеджером провайдеров: нет БД, истории, логирования,
 прокси, IPC, автопоиска моделей. Каждый запуск независим.
 
 ---
@@ -12,7 +13,8 @@
 
 - Windows x64
 - .NET 10 SDK (только для сборки)
-- Установленный Claude Code CLI (команда `claude` в `PATH`)
+- Установленный Claude Code CLI (команда `claude` в `PATH`) — для работы с Claude Code
+- Установленный OpenAI Codex CLI (команда `codex` в `PATH`) — для работы с Codex
 
 Проверка установленного Claude Code:
 
@@ -28,13 +30,13 @@ claude --help
 Команда сборки финального дистрибутива:
 
 ```powershell
-dotnet publish "src\ClaudeProviderLauncher\ClaudeProviderLauncher.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o "dist\ClaudeProviderLauncher"
+dotnet publish "src\ClaudeProviderLauncher\ClaudeProviderLauncher.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o "dist\AgentProviderLauncher"
 ```
 
 Точный путь к готовому исполняемому файлу:
 
 ```
-E:\Projects\Claude Provider Manager\dist\ClaudeProviderLauncher\ClaudeProviderLauncher.exe
+E:\Projects\Agent Provider Manager\dist\AgentProviderLauncher\ClaudeProviderLauncher.exe
 ```
 
 ---
@@ -42,21 +44,22 @@ E:\Projects\Claude Provider Manager\dist\ClaudeProviderLauncher\ClaudeProviderLa
 ## Быстрый запуск и Использование
 
 ### Краткая инструкция по запуску:
-1. Перейдите в каталог дистрибутива `dist\ClaudeProviderLauncher\` (`E:\Projects\Claude Provider Manager\dist\ClaudeProviderLauncher\`).
+1. Перейдите в каталог дистрибутива `dist\AgentProviderLauncher\` (`E:\Projects\Agent Provider Manager\dist\AgentProviderLauncher\`).
 2. Запустите файл `ClaudeProviderLauncher.exe` (двойным кликом или из PowerShell/CMD).
 3. На целевом компьютере с Windows x64 установка .NET Runtime/SDK не требуется.
 
 ### Инструкция по работе:
 
 1. Запустить `ClaudeProviderLauncher.exe`.
-2. При необходимости выбрать сохранённый **Пресет** в выпадающем списке (см. раздел «Пресеты» ниже) — он заполнит Base URL, ключ и модель.
-3. Заполнить:
+2. В верхней части окна выбрать инструмент: **Claude Code** или **Codex**.
+3. При необходимости выбрать сохранённый **Пресет** в выпадающем списке (см. раздел «Пресеты» ниже) — он заполнит Base URL, ключ и модель для выбранного инструмента.
+4. Заполнить:
    - **Base URL** — адрес API провайдера (см. раздел «Base URL» ниже);
    - **API Key / Auth Token** — ключ (поле маскированное);
    - **Model** — идентификатор модели (у разных провайдеров регистр важен);
    - **Working Directory** — существующая папка проекта (кнопка «Browse…»).
-4. Нажать **START CLAUDE CODE**.
-5. Откроется отдельное интерактивное окно Claude Code в выбранной папке.
+5. Нажать **START** (для выбранного инструмента: **START CLAUDE CODE** или **START CODEX**).
+6. Откроется отдельное интерактивное окно выбранного инструмента в указанной папке.
 
 Последние введённые значения (Base URL, Model, Working Directory) запоминаются для удобства.
 Ключ в «последних значениях» **не сохраняется никогда** (хранится только в пресетах, см. ниже).
@@ -65,8 +68,8 @@ E:\Projects\Claude Provider Manager\dist\ClaudeProviderLauncher\ClaudeProviderLa
 
 ## Пресеты
 
-Компактный выпадающий список вверху окна хранит именованные комбинации
-**Base URL + API Key / Auth Token + Model**:
+Компактный выпадающий список хранит именованные комбинации
+**Base URL + API Key / Auth Token + Model** — **отдельно для каждого инструмента**:
 
 - **Сохранить пресет** — спрашивает название и сохраняет текущие три значения
   (при совпадении имени предлагает перезапись);
@@ -77,7 +80,7 @@ E:\Projects\Claude Provider Manager\dist\ClaudeProviderLauncher\ClaudeProviderLa
 **Working Directory в пресет не входит и при выборе пресета не меняется** — папка проекта
 задаётся отдельно для каждого запуска.
 
-Пресеты лежат в `%LOCALAPPDATA%\ClaudeProviderLauncher\presets.json` (рядом с остальными
+Пресеты Claude Code и Codex хранятся независимо в `%LOCALAPPDATA%\ClaudeProviderLauncher\presets.json` (рядом с остальными
 настройками лаунчера) и переживают перезапуск приложения. Если пресетов нет, приложение
 работает как прежде. Ключ в файле зашифрован через Windows DPAPI (scope «CurrentUser»),
 читается только текущим пользователем этого ПК; при попытке прочитать чужой/повреждённый
@@ -87,8 +90,10 @@ E:\Projects\Claude Provider Manager\dist\ClaudeProviderLauncher\ClaudeProviderLa
 
 ## Как это работает
 
-Claude Code передаётся конфигурация **только через переменные окружения дочернего процесса** –
-глобальные переменные Windows и `~/.claude/settings.json` не изменяются:
+Конфигурация передаётся **только через переменные окружения дочернего процесса** –
+глобальные переменные Windows и конфигурационные файлы инструментов не изменяются.
+
+### Claude Code
 
 | Переменная | Значение |
 | - | - |
@@ -99,7 +104,7 @@ Claude Code передаётся конфигурация **только чер�
 
 Дополнительно модель передаётся флагом `--model <model>` (CLI‑флаг имеет высший приоритет).
 
-### Почему отдельный `CLAUDE_CONFIG_DIR`
+#### Почему отдельный `CLAUDE_CONFIG_DIR`
 
 Значения из блока `env` в `~/.claude/settings.json` **переопределяют** переменные окружения
 процесса (это подтверждено документацией и issue anthropics/claude-code#8500). Если у вас,
@@ -110,6 +115,14 @@ Claude Code передаётся конфигурация **только чер�
 
 В этом же каталоге лаунчер помечает онбординг завершённым и заранее подтверждает доверие к
 выбранной рабочей папке, чтобы запуск был действительно в один клик.
+
+### Codex
+
+Codex запускается с параметром `-c` для переопределения конфигурации и переменной окружения
+`OPENAI_API_KEY` для API-ключа. Файл `~/.codex/config.toml` читается только для чтения и
+**никогда не модифицируется** приложением. Если используется профиль «Default: Codex (config.toml)»,
+запускается Codex без дополнительных параметров, сохраняя пользовательскую конфигурацию (ChatGPT
+логин или настроенный провайдер).
 
 ---
 

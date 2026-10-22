@@ -23,19 +23,19 @@ public static class SystemProfiles
     public const string CodexDisplayName = "Default: Codex (config.toml)";
 
     /// <summary>
-    /// Claude Code's existing default behaviour is preserved: the last non-secret
-    /// Base URL and model are loaded, the API key is never restored from disk.
-    /// Codex's default follows the existing ~/.codex/config.toml read-only and
-    /// therefore keeps the user's ChatGPT login or configured provider.
+    /// Reads the live configuration from each tool's native config file:
+    /// - Claude Code: ~/.claude/settings.json (env: ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN/ANTHROPIC_API_KEY, model)
+    /// - Codex: ~/.codex/config.toml (model, model_provider, base_url, env_key)
+    /// If a config is missing or unreadable, returns an empty snapshot with error info.
     /// </summary>
     public static SystemProfile Get(
         ToolKind tool,
         string? codexConfigPath = null,
-        LastValues? claudeLastValues = null)
+        string? claudeConfigPath = null)
     {
         return tool switch
         {
-            ToolKind.ClaudeCode => CreateClaude(claudeLastValues ?? LastValuesStore.Load()),
+            ToolKind.ClaudeCode => CreateClaude(claudeConfigPath ?? ClaudeConfigReader.DefaultPath),
             ToolKind.Codex => CreateCodex(codexConfigPath ?? CodexConfigReader.DefaultPath),
             _ => throw new ArgumentOutOfRangeException(nameof(tool), tool, null),
         };
@@ -60,19 +60,27 @@ public static class SystemProfiles
             || string.Equals(trimmed, DisplayName(tool), StringComparison.OrdinalIgnoreCase);
     }
 
-    private static SystemProfile CreateClaude(LastValues lastValues)
+    private static SystemProfile CreateClaude(string configPath)
     {
+        var snapshot = ClaudeConfigReader.Read(configPath);
+
+        // Prefer AUTH_TOKEN over API_KEY if both present; neither is written back to disk by this app.
+        var apiKey = !string.IsNullOrWhiteSpace(snapshot.AuthToken)
+            ? snapshot.AuthToken
+            : snapshot.ApiKey;
+
         return new SystemProfile
         {
             Tool = ToolKind.ClaudeCode,
             DisplayName = ClaudeDisplayName,
+            Error = snapshot.Error,
             Preset = new ProviderPreset
             {
                 Name = ClaudeDisplayName,
                 Tool = ToolKind.ClaudeCode,
-                BaseUrl = lastValues.BaseUrl ?? string.Empty,
-                Model = lastValues.Model ?? string.Empty,
-                ApiKey = string.Empty,
+                BaseUrl = snapshot.BaseUrl ?? string.Empty,
+                Model = snapshot.Model ?? string.Empty,
+                ApiKey = apiKey ?? string.Empty,
             },
         };
     }

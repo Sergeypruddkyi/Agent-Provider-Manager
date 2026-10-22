@@ -9,8 +9,8 @@
 
     <RootNamespace>ClaudeProviderLauncher</RootNamespace>
     <AssemblyName>ClaudeProviderLauncher</AssemblyName>
-    <Product>Claude Code Provider Launcher</Product>
-    <AssemblyTitle>Claude Code Provider Launcher</AssemblyTitle>
+    <Product>Agent Provider Manager</Product>
+    <AssemblyTitle>Agent Provider Manager</AssemblyTitle>
     <Version>1.0.0</Version>
     <ApplicationIcon>..\..\assets\icon.ico</ApplicationIcon>
 
@@ -28,6 +28,10 @@
     <Resource Include="..\..\assets\icon.png">
       <LogicalName>icon.png</LogicalName>
     </Resource>
+    <!-- Default presets embedded as a resource -->
+    <EmbeddedResource Include="DefaultPresets.json">
+      <LogicalName>ClaudeProviderLauncher.DefaultPresets.json</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

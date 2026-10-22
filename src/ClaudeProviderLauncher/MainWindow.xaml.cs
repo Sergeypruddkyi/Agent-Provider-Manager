@@ -13,7 +13,7 @@ namespace ClaudeProviderLauncher;
 /// <summary>
 /// Interaction logic for MainWindow.xaml
 /// </summary>
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IProfileFieldTarget
 {
     private static readonly SolidColorBrush SuccessBrush = new(Color.FromRgb(108, 203, 108));
     private static readonly SolidColorBrush ErrorBrush = new(Color.FromRgb(255, 107, 107));
@@ -24,6 +24,7 @@ public partial class MainWindow : Window
 
     private readonly PresetStore _presetStore = new();
     private readonly ProviderConfigurationManager _providerConfiguration = new();
+    private readonly ICliDetector _cliDetector = new DefaultCliDetector();
 
     private ToolKind? _selectedTool;
     private SystemProfile? _systemProfile;
@@ -31,6 +32,9 @@ public partial class MainWindow : Window
     private List<ProfileChoice> _allProfiles = new();
     private bool _loadingFields;
     private bool _loadingProfile;
+
+    private CliDetectionResult? _claudeCliResult;
+    private CliDetectionResult? _codexCliResult;
 
     public MainWindow()
     {
@@ -46,6 +50,9 @@ public partial class MainWindow : Window
         ModelBox.TextChanged += ProfileField_Changed;
         ApiKeyBox.PasswordChanged += ProfileField_Changed;
         ProfileNameBox.TextChanged += ProfileNameBox_TextChanged;
+
+        // Detect CLI availability on startup
+        DetectAndUpdateCliStatus();
 
         // Start directly on Claude Code instead of showing the intermediate tool-selection screen.
         SelectTool(ToolKind.ClaudeCode);
@@ -78,6 +85,57 @@ public partial class MainWindow : Window
         if (e.ChangedButton == MouseButton.Left)
         {
             DragMove();
+        }
+    }
+
+    /// <summary>
+    /// Detects both CLIs and updates the status display.
+    /// </summary>
+    private void DetectAndUpdateCliStatus()
+    {
+        if (_claudeCliResult is null)
+        {
+            _claudeCliResult = _cliDetector.DetectClaude();
+        }
+        if (_codexCliResult is null)
+        {
+            _codexCliResult = _cliDetector.DetectCodex();
+        }
+
+        UpdateCliStatusDisplay();
+    }
+
+    private void UpdateCliStatusDisplay()
+    {
+        // Show both statuses when no tool is selected, or always show both
+        if (_claudeCliResult is { } claudeResult)
+        {
+            if (claudeResult.IsFound)
+            {
+                ClaudeCliStatusText.Text = "Claude Code CLI: обнаружен";
+                ClaudeCliStatusText.Foreground = SuccessBrush;
+            }
+            else
+            {
+                var message = claudeResult.ErrorMessage ?? "не найден";
+                ClaudeCliStatusText.Text = $"Claude Code CLI: {message}";
+                ClaudeCliStatusText.Foreground = ErrorBrush;
+            }
+        }
+
+        if (_codexCliResult is { } codexResult)
+        {
+            if (codexResult.IsFound)
+            {
+                CodexCliStatusText.Text = "Codex CLI: обнаружен";
+                CodexCliStatusText.Foreground = SuccessBrush;
+            }
+            else
+            {
+                var message = codexResult.ErrorMessage ?? "не найден";
+                CodexCliStatusText.Text = $"Codex CLI: {message}";
+                CodexCliStatusText.Foreground = ErrorBrush;
+            }
         }
     }
 
@@ -135,6 +193,9 @@ public partial class MainWindow : Window
     /// <summary>
     /// Switches tools from a clean state. Values from the previous tool are removed
     /// before the new tool's own default profile and presets are loaded.
+    /// Does NOT read the config itself: the single ordered load runs in
+    /// <see cref="ReloadProfiles"/> (read system config → build system profile →
+    /// select system profile → fill the fields), so startup cannot mix orderings.
     /// </summary>
     private void SelectTool(ToolKind tool)
     {
@@ -160,9 +221,8 @@ public partial class MainWindow : Window
             RestoreLastWorkingDirectory();
         }
 
-        _systemProfile = SystemProfiles.Get(tool);
-
         UpdateToolButtonStyles();
+        UpdateCliStatusDisplay();
         ReloadProfiles(selectId: SystemProfileIds.For(tool));
     }
 
@@ -200,18 +260,41 @@ public partial class MainWindow : Window
         UpdateProfileLabels();
     }
 
+    /// <summary>
+    /// The single ordered loading path for both startup and changing the selected
+    /// profile. Executed strictly in this sequence, once per load:
+    /// 1. READ the live CLI configuration of the selected tool
+    ///    (<c>~/.claude/settings.json</c> or <c>~/.codex/config.toml</c>) —
+    ///    never a cached snapshot, never last entered values;
+    /// 2. CREATE the system profile from what was read and rebuild the picker
+    ///    list (system profile + user presets of this tool only);
+    /// 3. SELECT the requested profile (system profile on startup);
+    /// 4. FILL the fields: <see cref="LoadProfile"/> →
+    ///    <see cref="ProfileFieldBinder.Apply(ProfileChoice?, IProfileFieldTarget)"/>
+    ///    → <see cref="MainWindow.SetFields"/>, clearing any field the selected
+    ///    profile does not have.
+    /// No caller loads profile values by any other route.
+    /// </summary>
     private void ReloadProfiles(string? selectId)
     {
-        if (_selectedTool is not { } tool || _systemProfile is null)
+        if (_selectedTool is not { } tool)
         {
             return;
         }
 
+        // Always read the live system profile to get current configuration.
+        // This ensures returning to the system profile shows up-to-date values.
+        var currentSystemProfile = SystemProfiles.Get(tool);
+        _systemProfile = currentSystemProfile;
+
         var profiles = new List<ProfileChoice>
         {
-            ProfileChoice.FromSystem(_systemProfile),
+            ProfileChoice.FromSystem(currentSystemProfile),
         };
-        profiles.AddRange(_presetStore.Load(tool).Select(ProfileChoice.FromPreset));
+
+        // Add user presets only. Default presets (built-in) are not shown in the dropdown
+        // to avoid cluttering the UI. They remain available internally if needed.
+        profiles.AddRange(_presetStore.LoadUser(tool).Select(ProfileChoice.FromPreset));
 
         _allProfiles = profiles;
         ProfileDropdownList.ItemsSource = profiles;
@@ -260,18 +343,9 @@ public partial class MainWindow : Window
         {
             _activeProfileId = choice.Id;
 
-            var preset = choice.Preset;
-            _loadingFields = true;
-            try
-            {
-                BaseUrlBox.Text = preset?.BaseUrl ?? string.Empty;
-                ApiKeyBox.Password = preset?.ApiKey ?? string.Empty;
-                ModelBox.Text = preset?.Model ?? string.Empty;
-            }
-            finally
-            {
-                _loadingFields = false;
-            }
+            // Fill the fields from the selected profile; missing values clear the
+            // corresponding field (nothing is left over from the previous profile).
+            ProfileFieldBinder.Apply(choice, this);
         }
         finally
         {
@@ -284,7 +358,28 @@ public partial class MainWindow : Window
 
         if (choice.IsSystem && _systemProfile?.Error is { } error)
         {
-            Fail("Codex configuration cannot be used: " + error);
+            Fail($"{tool.DisplayName()} configuration cannot be used: " + error);
+        }
+    }
+
+    /// <summary>
+    /// The UI side of the profile loading path (see <see cref="ProfileFieldBinder"/>):
+    /// pushes the selected profile's values into the three provider fields. The
+    /// <c>_loadingFields</c> guard keeps these programmatic assignments from being
+    /// treated as user edits.
+    /// </summary>
+    public void SetFields(string baseUrl, string apiKey, string model)
+    {
+        _loadingFields = true;
+        try
+        {
+            BaseUrlBox.Text = baseUrl ?? string.Empty;
+            ApiKeyBox.Password = apiKey ?? string.Empty;
+            ModelBox.Text = model ?? string.Empty;
+        }
+        finally
+        {
+            _loadingFields = false;
         }
     }
 
@@ -328,6 +423,7 @@ public partial class MainWindow : Window
 
         var selected = _allProfiles.FirstOrDefault(p => string.Equals(p.Id, _activeProfileId, StringComparison.Ordinal));
         var isSystem = selected?.IsSystem == true;
+        var isDefault = selected?.IsDefault == true;
         var hasTypedName = !string.IsNullOrWhiteSpace(ProfileNameBox.Text);
         var profileName = selected?.DisplayName
             ?? (hasTypedName ? ProfileNameBox.Text.Trim()
@@ -335,20 +431,28 @@ public partial class MainWindow : Window
 
         ActiveProfileText.Text = $"{tool.DisplayName()} — {profileName}";
 
-        ProfileHintText.Text = (tool, isSystem, selected, hasTypedName) switch
+        ProfileHintText.Text = (tool, isSystem, isDefault, selected, hasTypedName) switch
         {
-            (ToolKind.ClaudeCode, true, _, _) =>
+            // System profiles (isSystem = true)
+            (ToolKind.ClaudeCode, true, _, _, _) =>
                 "Default Claude Code profile. The API key is never stored; enter it for this launch.",
-            (ToolKind.Codex, true, _, _) =>
+            (ToolKind.Codex, true, _, _, _) =>
                 "Default Codex profile using ~/.codex/config.toml. The file is never modified by this app.",
-            (ToolKind.Codex, false, { } choice, _) when string.IsNullOrWhiteSpace(choice.Preset?.BaseUrl) =>
+
+            // Default presets (isDefault = true, isSystem = false)
+            (_, false, true, _, _) =>
+                "Built-in default preset. To customize, save as a new user preset with a different name.",
+
+            // User presets
+            (ToolKind.Codex, false, false, { } choice, _) when string.IsNullOrWhiteSpace(choice.Preset?.BaseUrl) =>
                 "User preset with the current Codex configuration.",
-            (ToolKind.Codex, false, { }, _) =>
+            (ToolKind.Codex, false, false, { }, _) =>
                 "User preset with a custom API provider.",
-            (_, false, _, true) =>
+            (_, false, false, _, true) =>
                 "New preset. Enter a name and provider values, then click Save Preset.",
-            (_, false, _, _) =>
+            (_, false, false, _, _) =>
                 "Manual values (not saved). Save Preset creates a separate preset for this tool.",
+
             _ => string.Empty,
         };
     }
@@ -356,15 +460,13 @@ public partial class MainWindow : Window
     private void UpdatePresetActions()
     {
         var selected = _allProfiles.FirstOrDefault(p => string.Equals(p.Id, _activeProfileId, StringComparison.Ordinal));
-        var isUserPreset = selected is { IsSystem: false };
+        var isUserPreset = selected is { IsSystem: false, IsDefault: false };
+        var isDefaultPreset = selected is { IsDefault: true };
         DeletePresetButton.IsEnabled = _selectedTool is not null && isUserPreset;
-        DeletePresetButton.ToolTip = isUserPreset
-            ? "Delete the selected user preset"
-            : "The system default profile cannot be deleted";
 
         // Save Preset is always enabled when there's a name (even if not selected from list)
         // It will save/update the preset with that name.
-        // If the name matches system profile, it will be rejected in SavePresetButton_Click.
+        // If the name matches system profile or default preset, it will be rejected in SavePresetButton_Click.
     }
 
     private void UpdateToolButtonStyles()
@@ -419,11 +521,12 @@ public partial class MainWindow : Window
         {
             ProfileDropdownPopup.IsOpen = false;
 
-            // Set the profile name in the text field
-            ProfileNameBox.Text = choice.DisplayName;
-            _activeProfileId = choice.Id;
-
-            LoadProfile(choice);
+            // A selection always re-runs the same loading path as startup: the profile
+            // list is rebuilt with the freshly read system profile, so the fields show
+            // the values of the profile selected NOW, never a snapshot captured earlier.
+            // A system parameter missing from the current config clears its field
+            // instead of keeping a previously loaded value.
+            ReloadProfiles(choice.Id);
         }
     }
 
@@ -448,8 +551,16 @@ public partial class MainWindow : Window
             return;
         }
 
-        var existingPreset = _presetStore.Find(tool, name);
-        if (existingPreset is not null)
+        var existingUserPreset = _presetStore.FindUser(tool, name);
+        var existingDefault = _presetStore.IsNameReservedByDefault(tool, name);
+
+        if (existingDefault)
+        {
+            Fail("This name is reserved for a built-in default preset. Choose another name.");
+            return;
+        }
+
+        if (existingUserPreset is not null)
         {
             var confirm = PresetConfirmDialog.Ask(
                 this,
@@ -524,6 +635,13 @@ public partial class MainWindow : Window
         var selected = _allProfiles.FirstOrDefault(p => string.Equals(p.Id, _activeProfileId, StringComparison.Ordinal));
         if (selected is not { IsSystem: false, Preset: { } preset })
         {
+            return;
+        }
+
+        // Cannot delete default presets
+        if (selected.IsDefault)
+        {
+            Fail("Built-in default presets cannot be deleted.");
             return;
         }
 

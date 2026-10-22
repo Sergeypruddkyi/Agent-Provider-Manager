@@ -141,20 +141,93 @@ public sealed class CodexConfigReaderTests : IDisposable
     }
 
     [Fact]
-    public void ClaudeDefaultProfile_KeepsExistingLastValuesAndNeverRestoresApiKey()
+    public void ClaudeDefaultProfile_ReadsFromSettingsJson_WhenAvailable()
     {
-        var last = new LastValues
-        {
-            BaseUrl = "https://claude.example",
-            Model = "claude-model",
-            WorkingDirectory = @"C:\work",
-        };
+        // Test the new ClaudeConfigReader directly
+        var tempFile = Path.Combine(_directory, "settings.json");
+        File.WriteAllText(tempFile, """
+            {
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://claude.example",
+                    "ANTHROPIC_AUTH_TOKEN": "sk-auth-token",
+                    "ANTHROPIC_API_KEY": "sk-api-key"
+                },
+                "model": "claude-model"
+            }
+            """);
 
-        var profile = SystemProfiles.Get(ToolKind.ClaudeCode, claudeLastValues: last);
+        var snapshot = ClaudeConfigReader.Read(tempFile);
+
+        Assert.False(snapshot.HasError);
+        Assert.Equal("https://claude.example", snapshot.BaseUrl);
+        Assert.Equal("sk-auth-token", snapshot.AuthToken);
+        Assert.Equal("sk-api-key", snapshot.ApiKey);
+        Assert.Equal("claude-model", snapshot.Model);
+    }
+
+    [Fact]
+    public void ClaudeDefaultProfile_PrefersAuthTokenOverApiKey()
+    {
+        var tempFile = Path.Combine(_directory, "settings.json");
+        File.WriteAllText(tempFile, """
+            {
+                "env": {
+                    "ANTHROPIC_AUTH_TOKEN": "sk-auth-token",
+                    "ANTHROPIC_API_KEY": "sk-api-key"
+                },
+                "model": "claude-model"
+            }
+            """);
+
+        var snapshot = ClaudeConfigReader.Read(tempFile);
+
+        Assert.Equal("sk-auth-token", snapshot.AuthToken);
+        Assert.Equal("sk-api-key", snapshot.ApiKey);
+    }
+
+    [Fact]
+    public void MissingClaudeConfig_IsValidAndEmpty()
+    {
+        var snapshot = ClaudeConfigReader.Read(Path.Combine(_directory, "nonexistent.json"));
+
+        Assert.False(snapshot.HasError);
+        Assert.Null(snapshot.BaseUrl);
+        Assert.Null(snapshot.AuthToken);
+        Assert.Null(snapshot.ApiKey);
+        Assert.Null(snapshot.Model);
+    }
+
+    [Fact]
+    public void CorruptedClaudeConfig_IsReportedAsError()
+    {
+        var tempFile = Path.Combine(_directory, "settings.json");
+        File.WriteAllText(tempFile, "{ not valid json }");
+
+        var snapshot = ClaudeConfigReader.Read(tempFile);
+
+        Assert.True(snapshot.HasError);
+        Assert.Contains("settings.json", snapshot.Error);
+    }
+
+    [Fact]
+    public void SystemProfile_ClaudeCode_UsesClaudeConfigReader()
+    {
+        var tempFile = Path.Combine(_directory, "settings.json");
+        File.WriteAllText(tempFile, """
+            {
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://claude.example",
+                    "ANTHROPIC_AUTH_TOKEN": "sk-auth-token"
+                },
+                "model": "claude-model"
+            }
+            """);
+
+        var profile = SystemProfiles.Get(ToolKind.ClaudeCode, claudeConfigPath: tempFile);
 
         Assert.Equal("https://claude.example", profile.Preset.BaseUrl);
+        Assert.Equal("sk-auth-token", profile.Preset.ApiKey); // AuthToken preferred
         Assert.Equal("claude-model", profile.Preset.Model);
-        Assert.Equal(string.Empty, profile.Preset.ApiKey);
-        Assert.Equal(ToolKind.ClaudeCode, profile.Preset.Tool);
+        Assert.Null(profile.Error);
     }
 }
