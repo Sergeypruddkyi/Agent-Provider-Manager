@@ -1,190 +1,244 @@
 # Agent Provider Manager
 
-Минимальный Windows‑лаунчер для управления провайдерами **Claude Code** и **OpenAI Codex**:
-вписать Base URL, ключ, модель и папку — и открыть выбранный инструмент в отдельном
-интерактивном консольном окне с этими настройками.
+![Agent Provider Manager](assets/agent-provider-manager.png)
 
-Приложение **не является** полноценным менеджером провайдеров: нет БД, истории, логирования,
-прокси, IPC, автопоиска моделей. Каждый запуск независим.
+A minimal Windows launcher for managing **Claude Code** and **OpenAI
+Codex** providers: enter the Base URL, API key, model, and working
+directory, then launch the selected tool in a separate interactive
+console window with those settings.
 
----
+The application is **not** a full-featured provider manager: it has no
+database, history, logging, proxy, IPC, or automatic model discovery.
+Each launch is independent.
 
-## Требования
+------------------------------------------------------------------------
 
-- Windows x64
-- .NET 10 SDK (только для сборки)
-- Установленный Claude Code CLI (команда `claude` в `PATH`) — для работы с Claude Code
-- Установленный OpenAI Codex CLI (команда `codex` в `PATH`) — для работы с Codex
+## Requirements
 
-Проверка установленного Claude Code:
+-   Windows x64
+-   .NET 10 SDK (for building only)
+-   Claude Code CLI installed (`claude` command available in `PATH`) to
+    use Claude Code
+-   OpenAI Codex CLI installed (`codex` command available in `PATH`) to
+    use Codex
 
-```powershell
-claude --version   # на момент разработки: 2.1.288
+Check the installed Claude Code version:
+
+``` powershell
+claude --version   # version at the time of development: 2.1.288
 claude --help
 ```
 
----
+------------------------------------------------------------------------
 
-## Сборка portable EXE (win-x64, self-contained)
+## Build a portable EXE (win-x64, self-contained)
 
-Команда сборки финального дистрибутива:
+Command to build the final distribution:
 
-```powershell
-dotnet publish "src\ClaudeProviderLauncher\ClaudeProviderLauncher.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o "dist\AgentProviderLauncher"
+``` powershell
+dotnet publish "src\\ClaudeProviderLauncher\\ClaudeProviderLauncher.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o "dist\\AgentProviderLauncher"
 ```
 
-Точный путь к готовому исполняемому файлу:
+Path to the generated executable:
 
+``` text
+E:\\Projects\\Agent Provider Manager\\dist\\AgentProviderLauncher\\ClaudeProviderLauncher.exe
 ```
-E:\Projects\Agent Provider Manager\dist\AgentProviderLauncher\ClaudeProviderLauncher.exe
-```
 
----
+------------------------------------------------------------------------
 
-## Быстрый запуск и Использование
+## Quick Start and Usage
 
-### Краткая инструкция по запуску:
-1. Перейдите в каталог дистрибутива `dist\AgentProviderLauncher\` (`E:\Projects\Agent Provider Manager\dist\AgentProviderLauncher\`).
-2. Запустите файл `ClaudeProviderLauncher.exe` (двойным кликом или из PowerShell/CMD).
-3. На целевом компьютере с Windows x64 установка .NET Runtime/SDK не требуется.
+### Quick start
 
-### Инструкция по работе:
+1.  Open the distribution directory `dist\\AgentProviderLauncher\\`.
+2.  Run `ClaudeProviderLauncher.exe` (double-click it or launch it from
+    PowerShell/CMD).
+3.  On Windows x64, installing the .NET Runtime or SDK on the target
+    computer is not required.
 
-1. Запустить `ClaudeProviderLauncher.exe`.
-2. В верхней части окна выбрать инструмент: **Claude Code** или **Codex**.
-3. При необходимости выбрать сохранённый **Пресет** в выпадающем списке (см. раздел «Пресеты» ниже) — он заполнит Base URL, ключ и модель для выбранного инструмента.
-4. Заполнить:
-   - **Base URL** — адрес API провайдера (см. раздел «Base URL» ниже);
-   - **API Key / Auth Token** — ключ (поле маскированное);
-   - **Model** — идентификатор модели (у разных провайдеров регистр важен);
-   - **Working Directory** — существующая папка проекта (кнопка «Browse…»).
-5. Нажать **START** (для выбранного инструмента: **START CLAUDE CODE** или **START CODEX**).
-6. Откроется отдельное интерактивное окно выбранного инструмента в указанной папке.
+### Using the application
 
-Последние введённые значения (Base URL, Model, Working Directory) запоминаются для удобства.
-Ключ в «последних значениях» **не сохраняется никогда** (хранится только в пресетах, см. ниже).
+1.  Run `ClaudeProviderLauncher.exe`.
+2.  Select a tool at the top of the window: **Claude Code** or
+    **Codex**.
+3.  Optionally select a saved **preset** from the dropdown (see the
+    Presets section below). It fills in the Base URL, key, and model for
+    the selected tool.
+4.  Fill in:
+    -   **Base URL** --- the provider API root (see the Base URL section
+        below);
+    -   **API Key / Auth Token** --- the key or token (the field is
+        masked);
+    -   **Model** --- the model identifier (case may matter for
+        different providers);
+    -   **Working Directory** --- an existing project folder (use
+        **Browse...**).
+5.  Click **START** (the button is **START CLAUDE CODE** or **START
+    CODEX**, depending on the selected tool).
+6.  The selected tool opens in a separate interactive window in the
+    chosen directory.
 
----
+The most recently entered Base URL, Model, and Working Directory are
+remembered for convenience. The API key is **never** saved in the
+recent-values file (it is stored only in presets; see below).
 
-## Пресеты
+------------------------------------------------------------------------
 
-Компактный выпадающий список хранит именованные комбинации
-**Base URL + API Key / Auth Token + Model** — **отдельно для каждого инструмента**:
+## Presets
 
-- **Сохранить пресет** — спрашивает название и сохраняет текущие три значения
-  (при совпадении имени предлагает перезапись);
-- **Перезаписать** — заменяет сохранённый пресет текущими значениями полей;
-- **Удалить** — удаляет выбранный пресет с подтверждением.
+The compact dropdown stores named combinations of **Base URL + API Key /
+Auth Token + Model**, separately for each tool:
 
-При выборе пресета три поля заполняются автоматически.
-**Working Directory в пресет не входит и при выборе пресета не меняется** — папка проекта
-задаётся отдельно для каждого запуска.
+-   **Save Preset** --- asks for a name and saves the current three
+    values (if the name already exists, it offers to overwrite it);
+-   **Overwrite** --- replaces the selected preset with the current
+    field values;
+-   **Delete** --- deletes the selected preset after confirmation.
 
-Пресеты Claude Code и Codex хранятся независимо в `%LOCALAPPDATA%\ClaudeProviderLauncher\presets.json` (рядом с остальными
-настройками лаунчера) и переживают перезапуск приложения. Если пресетов нет, приложение
-работает как прежде. Ключ в файле зашифрован через Windows DPAPI (scope «CurrentUser»),
-читается только текущим пользователем этого ПК; при попытке прочитать чужой/повреждённый
-файл ключ просто считается пустым и вводится заново.
+Selecting a preset fills in the three fields automatically. The Working
+Directory is not part of a preset and does not change when a preset is
+selected; the project directory is set separately for each launch.
 
----
+Claude Code and Codex presets are stored separately in
+`%LOCALAPPDATA%\\ClaudeProviderLauncher\\presets.json`, alongside the
+launcher's other settings, and persist across application restarts. If
+no presets exist, the application works as before. The key is encrypted
+in the file using Windows DPAPI (`CurrentUser` scope); only the current
+Windows user on that PC can decrypt it. If the file is unreadable,
+belongs to another user, or is corrupted, the key is treated as empty
+and must be entered again.
 
-## Как это работает
+------------------------------------------------------------------------
 
-Конфигурация передаётся **только через переменные окружения дочернего процесса** –
-глобальные переменные Windows и конфигурационные файлы инструментов не изменяются.
+## How It Works
+
+Configuration is passed **only through the child process's environment
+variables**. The application's global Windows environment variables and
+the tools' configuration files are not modified.
 
 ### Claude Code
 
-| Переменная | Значение |
-| - | - |
-| `ANTHROPIC_BASE_URL` | Base URL из поля (см. нормализацию ниже) |
-| `ANTHROPIC_AUTH_TOKEN` | введённый ключ/токен |
-| `ANTHROPIC_MODEL` | модель из поля |
-| `CLAUDE_CONFIG_DIR` | отдельная папка `%LOCALAPPDATA%\ClaudeProviderLauncher\claude-home` |
+  -------------------------------------------------------------------------------------------
+  Variable                            Value
+  ----------------------------------- -------------------------------------------------------
+  `ANTHROPIC_BASE_URL`                Base URL from the field (normalized as described below)
 
-Дополнительно модель передаётся флагом `--model <model>` (CLI‑флаг имеет высший приоритет).
+  `ANTHROPIC_AUTH_TOKEN`              The entered key/token
 
-#### Почему отдельный `CLAUDE_CONFIG_DIR`
+  `ANTHROPIC_MODEL`                   Model from the field
 
-Значения из блока `env` в `~/.claude/settings.json` **переопределяют** переменные окружения
-процесса (это подтверждено документацией и issue anthropics/claude-code#8500). Если у вас,
-например, в `~/.claude/settings.json` уже прописан другой провайдер, он «победил бы» настройки
-лаунчера. Поэтому запуск идёт с отдельным каталогом конфигурации: пользовательский
-`~/.claude/settings.json` не читается (и не изменяется), а значения лаунчера становятся
-единственным источником. Каждый запуск полностью независим.
+  `CLAUDE_CONFIG_DIR`                 Separate configuration directory:
+                                      `%LOCALAPPDATA%\\ClaudeProviderLauncher\\claude-home`
+  -------------------------------------------------------------------------------------------
 
-В этом же каталоге лаунчер помечает онбординг завершённым и заранее подтверждает доверие к
-выбранной рабочей папке, чтобы запуск был действительно в один клик.
+The model is also passed using the `--model <model>` argument (the CLI
+argument has the highest priority).
+
+#### Why a separate `CLAUDE_CONFIG_DIR`?
+
+Values in the `env` block of `~/.claude/settings.json` **override** the
+process environment variables (this is confirmed by the documentation
+and issue anthropics/claude-code#8500). For example, if
+`~/.claude/settings.json` already specifies another provider, it could
+override the launcher's settings. The launcher therefore starts Claude
+Code with a separate configuration directory: the user's
+`~/.claude/settings.json` is neither read nor modified, and the
+launcher's values are the single source of configuration. Each launch is
+independent.
+
+In this directory, the launcher also marks onboarding as complete and
+pre-approves trust for the selected working directory so the tool can
+start with one click.
 
 ### Codex
 
-Codex запускается с параметром `-c` для переопределения конфигурации и переменной окружения
-`OPENAI_API_KEY` для API-ключа. Файл `~/.codex/config.toml` читается только для чтения и
-**никогда не модифицируется** приложением. Если используется профиль «Default: Codex (config.toml)»,
-запускается Codex без дополнительных параметров, сохраняя пользовательскую конфигурацию (ChatGPT
-логин или настроенный провайдер).
+Codex is launched with the `-c` option to override configuration and the
+`OPENAI_API_KEY` environment variable for the API key. The file
+`~/.codex/config.toml` is read-only and is **never modified** by the
+application. When using the **Default: Codex (config.toml)** profile,
+Codex starts without additional arguments, preserving the user's
+existing configuration (ChatGPT sign-in or configured provider).
 
----
+------------------------------------------------------------------------
 
-## Base URL: без `/v1`
+## Base URL: Do Not Include a Trailing `/v1`
 
-Проверено на установленной версии (2.1.288): Claude Code **сам добавляет `/v1/messages`** к
-`ANTHROPIC_BASE_URL`. Поэтому адрес должен задавать корень API **без завершающего `/v1`**:
+Tested with Claude Code version 2.1.288: Claude Code **automatically
+appends `/v1/messages`** to `ANTHROPIC_BASE_URL`. Therefore, the URL
+should specify the API root without a trailing `/v1`:
 
-- `https://anymodel.org/v1` → запрос уйдёт на `/v1/v1/messages` → ошибка;
-- `https://anymodel.org` → запрос уйдёт на `/v1/messages` → правильно.
+-   `https://anymodel.org/v1` → the request goes to `/v1/v1/messages` →
+    error;
+-   `https://anymodel.org` → the request goes to `/v1/messages` →
+    correct.
 
-Лаунчер автоматически убирает завершающий `/v1`, поэтому можно ввести и `https://anymodel.org/v1`.
-Любой другой путь сохраняется как есть, например `https://host/api` корректно превращается
-в `https://host/api/v1/messages`.
+The launcher automatically removes a trailing `/v1`, so you may enter
+`https://anymodel.org/v1`. Any other path is preserved; for example,
+`https://host/api` correctly becomes `https://host/api/v1/messages`.
 
----
+------------------------------------------------------------------------
 
-## Требование к провайдеру: Anthropic Messages API
+## Provider Requirement: Anthropic Messages API
 
-Claude Code общается по протоколу **Anthropic Messages** (`POST /v1/messages`). Провайдер должен
-поддерживать именно его.
+Claude Code uses the **Anthropic Messages** protocol
+(`POST /v1/messages`). The provider must support it.
 
-Проверено напрямую:
+Tested directly:
 
-| Провайдер | `/v1/messages` | `/v1/chat/completions` (OpenAI) | Совместим с Claude Code |
-| - | - | - | - |
-| AnyModel (`https://anymodel.org`) | есть (401 на неверный ключ) | — | **да** |
-| Top Tools (`https://top-tools-ai.com`) | **404** | 200 OK | **нет** (только OpenAI) |
-| Code Craft (`https://codecraftapi.com`) | **404** | 200 OK | **нет** (только OpenAI) |
+  -------------------------------------------------------------------------------------------
+  Provider                       `/v1/messages`    `/v1/chat/completions`   Compatible with
+                                                   (OpenAI)                 Claude Code
+  ------------------------------ ----------------- ------------------------ -----------------
+  AnyModel                       available (401    ---                      **yes**
+  (`https://anymodel.org`)       with an invalid                            
+                                 key)                                       
 
-Если провайдер поддерживает только OpenAI‑формат (`/chat/completions`), он **не заработает**
-с Claude Code напрямую — нужен отдельный прокси‑транслятор
-(например, `CLIProxyAPI`), который отдаёт наружу Anthropic `POST /v1/messages`.
+  Top Tools                      **404**           200 OK                   **no** (OpenAI
+  (`https://top-tools-ai.com`)                                              only)
 
----
+  Code Craft                     **404**           200 OK                   **no** (OpenAI
+  (`https://codecraftapi.com`)                                              only)
+  -------------------------------------------------------------------------------------------
 
-## Безопасность
+If a provider supports only the OpenAI format (`/chat/completions`), it
+will **not work** directly with Claude Code. A separate protocol
+translation proxy is required (for example, `CLIProxyAPI`) to expose
+Anthropic `POST /v1/messages`.
 
-- Ключ передаётся только через окружение дочернего процесса.
-- Ключ **не** попадает в командную строку, `.cmd`/`.ps1`, логи и не сохраняется в «последних значениях».
-- В пресетах ключ хранится **только в зашифрованном виде** (DPAPI, CurrentUser) в
-  `%LOCALAPPDATA%\ClaudeProviderLauncher\presets.json` — вне папки проекта и Git.
-- Глобальные переменные окружения Windows не изменяются.
-- `~/.claude/settings.json` не читается и не изменяется.
+------------------------------------------------------------------------
 
----
+## Security
 
-## Тесты
+-   The key is passed only through the child process environment.
+-   The key is **not** included in the command line, `.cmd`/`.ps1`
+    files, or logs, and is not saved in recent values.
+-   In presets, the key is stored **only in encrypted form** (DPAPI,
+    `CurrentUser`) in
+    `%LOCALAPPDATA%\\ClaudeProviderLauncher\\presets.json`, outside the
+    project directory and Git.
+-   Global Windows environment variables are not modified.
+-   `~/.claude/settings.json` is neither read nor modified.
 
-```powershell
-dotnet test "tests\ClaudeProviderLauncher.Tests\ClaudeProviderLauncher.Tests.csproj" -c Release
+------------------------------------------------------------------------
+
+## Tests
+
+``` powershell
+dotnet test "tests\\ClaudeProviderLauncher.Tests\\ClaudeProviderLauncher.Tests.csproj" -c Release
 ```
 
-Покрытие: сохранение/загрузка пресетов, выбор, перезапись, удаление, шифрование ключа
-на диске, устойчивость к битому файлу.
+Coverage includes saving/loading presets, selection, overwriting and
+deleting presets, encrypting keys on disk, and handling corrupted files.
 
----
+------------------------------------------------------------------------
 
-## Чего здесь нет (по замыслу)
+## Intentionally Out of Scope
 
-Система профилей (пресеты — только три значения провайдера, без папок и настроек запуска),
-база данных, IPC, Named Pipes, отдельный runner, проверка совместимости API,
-автоопределение моделей, AWS Bedrock, Google Vertex, OAuth, история запусков, система
-логирования, встроенный терминал, редактирование `settings.json`, изменение системных
-переменных, автоустановка/автообновление Claude Code.
+The application does not include a system of profiles (presets contain
+only three provider values, not folders or launch settings), a database,
+IPC, Named Pipes, a separate runner, API compatibility checks, automatic
+model discovery, AWS Bedrock, Google Vertex, OAuth, launch history,
+logging, an embedded terminal, `settings.json` editing, system
+environment-variable changes, or automatic installation/updating of
+Claude Code.
